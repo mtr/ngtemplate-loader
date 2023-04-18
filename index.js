@@ -37,29 +37,30 @@ module.exports = function (content) {
     if (relativeToIndex === -1 || (absolute && relativeToIndex !== 0)) {
         throw new Error('The path for file doesn\'t contain relativeTo param');
     }
-
     // a custom join of prefix using the custom path sep
-    var filePath = [prefix, resource.slice(relativeToIndex + relativeTo.length)]
-        .filter(Boolean)
-        .join(pathSep)
-        .replace(new RegExp(escapeRegExp(pathSep) + '+', 'g'), pathSep);
-    
     // Replace the default export with an assigment to the _module_exports variable.
-    var exportRe = /module\.exports\s*=|export default\s+/g;
-    if (exportRe.test(content)) {
-        contentWithVar = content.replace(exportRe, 'var _module_exports =')                
+    var filePath = [prefix, resource.slice(relativeToIndex + relativeTo.length)]
+            .filter(Boolean)
+            .join(pathSep)
+            .replace(new RegExp(escapeRegExp(pathSep) + '+', 'g'), pathSep),
+        exportRe = /module\.exports\s*=|export default\s+|exports.default\s*=/g,
+        exportExprMatch = content.match(exportRe), exportExpr, contentWithVar;
+
+    if (exportExprMatch) {
+        contentWithVar = content.replace(exportRe, 'var _module_exports = ')
+        exportExpr = exportExprMatch[0];
     } else {
         // If there is no default export, try just using the content. 
         // Probably doesn't work, but it's been here forever so can't remove now :)
         contentWithVar = "var _module_exports = " + content;
+        exportExpr = 'module.exports = ';
     }
 
     // Append a snippet that loads the template into the cache, and exports the path.
-    return contentWithVar + ";\n" + 
+    return contentWithVar + ";\n" +
         "var path = '"+jsesc(filePath)+"';\n" +
         (requireAngular ? "var angular = require('angular');\n" : "window.") +
-        "angular.module('" + ngModule + "').run(['$templateCache', function(c) { c.put(path, _module_exports) }]);\n" +
-        "module.exports = path;";
+        "angular.module('" + ngModule + "').run(['$templateCache', function(c) { c.put(path, _module_exports) }]);\n" + exportExpr + "path;";
 
     function getAndInterpolateOption(optionKey, def) {
         return options[optionKey]
